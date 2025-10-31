@@ -18,7 +18,7 @@
 #define THMTS_CTRL_GET_CMD_TYPE( msgType )               ( ( msgType >> 4 ) & 0x03 )
 #define THMTS_CTRL_GET_CMD_IDX( msgType )                ( ( msgType ) & 0x0f )
 
-#define THMTS_CTRL_SERIAL_BUF_SIZE                       128
+#define THMTS_CTRL_SERIAL_BUF_SIZE                       4096
 
 typedef struct
 {

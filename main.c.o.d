@@ -50,5 +50,6 @@ main.c.o: main.c ../../OS/FreeRTOS/Source/include/FreeRTOS.h \
  ../../SoC/ns_core0/Board/fpga_eval/Include/fpga_eval.h \
  ../../SoC/ns_core0/Common/Include/ns_sdk_soc.h thmts_bb_config.h \
  thmts_rf_config.h thmts_bsp.h flash.h thmts_node_info.h \
- thmts_trxctrl_serial_cmd_type.h ringbuffer.h thmts_ranging.h PPS_SYNC.h \
- thmts_phy_param.h thmts_config.h thmts_tx_msg.h thmts_sensor.h
+ thmts_trxctrl_serial_cmd_type.h ringbuffer.h thmts_ranging.h \
+ thmts_pdoa.h PPS_SYNC.h thmts_phy_param.h thmts_config.h thmts_tx_msg.h \
+ thmts_sensor.h

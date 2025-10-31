@@ -9,7 +9,7 @@ uint8_t SWITCH_THMTS_RX_CIR_CH1_INFO_T = 0;  // 控制通道1 CIR 是否发射�
 uint8_t SWITCH_THMTS_RX_CIR_CH2_INFO_T = 0;  // 控制通道2 CIR 是否发射的开关, 1:上传通道2 CIR , 0:不上传通道2 CIR
 uint8_t SWITCH_THMTS_RX_CIR_CH3_INFO_T = 0;  // 控制通道3 CIR 是否发射的开关, 1:上传通道3 CIR , 0:不上传通道3 CIR
 uint8_t SWITCH_THMTS_RANGING_INFO_T    = 0;  // 控制测距消息是否发射的开关,   1:上传测距结果     0:不上传测距结果
-uint8_t SWITCH_THMTS_RANGE_AND_DATA_T  = 1;  // 控制数据包和测距值消息是否发射的开关,   1:上传结果     0:不上传结果
+uint8_t SWITCH_THMTS_RANGE_AND_DATA_T  = 0;  // 控制数据包和测距值消息是否发射的开关,   1:上传结果     0:不上传结果
 uint8_t SWITCH_THMTS_SENSOR_IMU_DATA_T = 0;  // 控制IMU传感器数据是否发射的开关, 1:上传IMU数据, 0:不上传IMU数据
 //uint8_t SWITCH_THMTS_SENSOR_IMU_DATA_T = 1;  // 控制IMU传感器数据是否发射的开关, 1:上传IMU数据, 0:不上传IMU数据
 

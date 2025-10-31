@@ -38,7 +38,8 @@ void DebugUart_Config( void );
 
 
 #define UART_TX_DMA_BUFF_SIZE 4096+64
-#define UART_RX_DMA_BUFF_SIZE 512
+//#define UART_RX_DMA_BUFF_SIZE 512
+#define UART_RX_DMA_BUFF_SIZE 4096
 
 void UDMA_USART1_TX_Init( void );
 void UDMA_USART1_RX_Init( void );

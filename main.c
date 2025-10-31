@@ -15,6 +15,7 @@
 
 #include "thmts_trxctrl_serial_cmd_type.h"
 #include "thmts_ranging.h"
+#include "thmts_pdoa.h"
 #include "PPS_SYNC.h"
 
 #include "thmts_phy_param.h"
@@ -26,23 +27,11 @@
 
 
 uint8_t reset_cnt = 0;
+int32_t AOA_index = 0;
 
 uint32_t CIR_data0[3][3];         // 通道0的CIR数据，采集三个点，第一径点以及对应前后两个点的数据
 uint32_t CIR_data1[3][3];         // 通道1的CIR数据，采集三个点，第一径点以及对应前后两个点的数据
 uint32_t CIR_data2[3][3];         // 通道2的CIR数据，采集三个点，第一径点以及对应前后两个点的数据
-
-
-typedef struct { double re, im; } c64;
-
-// 从 32bit 打包值中取出 I/Q（低16=I，高16=Q，均为有符号）
-static inline c64 iq_from_u32(uint32_t x) {
-    int16_t I = (int16_t)(x & 0xFFFF);
-    int16_t Q = (int16_t)((x >> 16) & 0xFFFF);
-    c64 z = { (double)I, (double)Q };
-    return z;
-}
-
-double cal_pdoa(const uint32_t CIR_a[3][3], const uint32_t CIR_b[3][3]);
 
 /* The period of the example software timer, specified in milliseconds, and
 converted to ticks using the pdMS_TO_TICKS() macro. */
@@ -674,7 +663,7 @@ uint32_t tof_two_nodes_compute_new(uint8_t i, uint8_t j, uint8_t ping_pong_flag)
 
 void task_processRanging(void* pvParameters)
 {
-
+	
     printf("Enter to task_processRanging.\r\n");
 
     while (1)
@@ -694,49 +683,45 @@ void task_processRanging(void* pvParameters)
 		tof_int_cm=tof_two_nodes_compute_new(0, 1, 1);
 
 
-		//添加一个测角的函数
+		//根据 
 		double phi1_0 = cal_pdoa(CIR_data0, CIR_data1);
 		double phi2_0 = cal_pdoa(CIR_data0, CIR_data2);
 		double phi2_1 = cal_pdoa(CIR_data1, CIR_data2);
-		//这里的计算结果就是三组PDOA内容，单位是弧度（rad），这里输出的话就是10Hz的输出频度
+		//这里的计算结果就是三组PDOA内容，单位是角度（°），这里输出的话就是10Hz的输出频度
 
-		txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff], " tof_int between %d and %d = %d cm, valid_cnt = %d \r\n" , 1-node.dev_id,node.dev_id, tof_int_cm,valid_count);
+//		txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff], " tof_int between %d and %d = %d cm, valid_cnt = %d \r\n" , 1-node.dev_id,node.dev_id, tof_int_cm,valid_count);
 
+		//TODO: RSSI获取
+		in32_t rssi=10;
+		
+		// 根据PDOA计算AOA
+		double azimuth = aoa_compute_from_pdoa(phi1_0, phi2_0, phi2_1);
 
-		txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
-				" PDOA data , phi1-0 = %d , phi2-0 = %d , phi2-1 = %d\r\n" ,
-				(int32_t)(100*phi1_0),
-				(int32_t)(100*phi2_0),
-				(int32_t)(100*phi2_1));
-		double phi0,phi1,phi2;
-		int16_t dataI,dataQ;
-		dataI = (int16_t)(CIR_data0[0][1] & 0xFFFF);
-		dataQ = (int16_t)((CIR_data0[0][1]>>16) & 0xFFFF);
-		phi0 = 57.2958*atan2(dataQ,dataI);
+		AOA_index++;
+//		// 上报信息：交互角色（TAG） 序号 测距 根据当前校准表计算的AOA 接收信号强度 原始PDOA1 原始PDOA2
 
-		dataI = (int16_t)(CIR_data1[0][1] & 0xFFFF);
-		dataQ = (int16_t)((CIR_data1[0][1]>>16) & 0xFFFF);
-		phi1 = 57.2958*atan2(dataQ,dataI);
-
-		dataI = (int16_t)(CIR_data2[0][1] & 0xFFFF);
-		dataQ = (int16_t)((CIR_data2[0][1]>>16) & 0xFFFF);
-		phi2 = 57.2958*atan2(dataQ,dataI);
-
-
-		txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
-						" PDOA data 2, phi1-0 = %d , phi2-0 = %d , phi2-1 = %d\r\n" ,
-						(int32_t)(100*(phi1-phi0)),
-						(int32_t)(100*(phi2-phi0)),
-						(int32_t)(100*(phi2-phi1)));
-
+		int32_t azimuth_integer=(int32_t)azimuth;
+		int32_t azimuth_decimal=abs(((int32_t)(azimuth*100))%100);
+		if(azimuth_decimal<10)
+		{
+			txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+				"TAG %7d %6d %3d.0%1d %4d %5d %5d",
+				AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi1_0),(int32_t)(-PDOA_scale*phi2_0));
+		}
+		else
+		{
+			txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+				"TAG %7d %6d %3d.%2d %4d %5d %5d",
+				AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi1_0),(int32_t)(-PDOA_scale*phi2_0));
+		}
 
 
 		// 打印
-		uint8_t ts_output=1;
-		uint8_t tof_output=1;
-		uint8_t rx_info_output=1;
+		uint8_t ts_output=0;
+		uint8_t tof_output=0;
+		uint8_t rx_info_output=0;
 
-		if(ts_output==1)
+		if(ts_output)
 		{
 			uint32_t ts_hi,ts_lo;
 
@@ -817,6 +802,7 @@ void task_processRanging(void* pvParameters)
 		memset(node.trx_stamps_subfrm2_ping, 0, sizeof(node.trx_stamps_subfrm2_ping));
 		memset(thmts_tx_frame_rx_stamp,0,sizeof(thmts_tx_frame_rx_stamp));
 
+
 		if(tof_output==1)
 		{
 			uint32_t tof_temp=0;
@@ -832,7 +818,6 @@ void task_processRanging(void* pvParameters)
 			txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
 			"\r\n");
 		}
-
 
 
 		if(rx_info_output==1)
@@ -1089,8 +1074,8 @@ void start_UWB_TR()
 						node.user_data_invalid_frm_cnt++;
 					}
 					int FER = node.user_data_invalid_frm_cnt * 100 / node.user_data_frm_cnt;
-					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf2[txPoint_buff], "frame cnt =%d , user_data_rx_valid = %d , user_data_frm_cnt = %d , user_data_invalid_frm_cnt = %d, FER = %d%% \r\n",
-							node.user_data_cnt, node.user_data_rx_valid, node.user_data_frm_cnt, node.user_data_invalid_frm_cnt, FER);
+//					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf2[txPoint_buff], "frame cnt =%d , user_data_rx_valid = %d , user_data_frm_cnt = %d , user_data_invalid_frm_cnt = %d, FER = %d%% \r\n",
+//							node.user_data_cnt, node.user_data_rx_valid, node.user_data_frm_cnt, node.user_data_invalid_frm_cnt, FER);
 
 					if (SWITCH_THMTS_RANGE_AND_DATA_T)
 					{
@@ -1973,6 +1958,16 @@ void process_received_message(thmts_ctrl_cmd_proc_msg_t *msg_info)
 		printf("type = 14 ,data = %d cmd info\r\n" , data[0]);
 		break;
 	}
+	case 0x70:
+	{
+		uint8_t* data = (uint8_t*)thmts_ctrl_cmd_proc_msg.msg_buf_ptr;
+
+		reset_cnt = 1;
+		printf("type = 0x70 rec pdoa cali info\r\n");
+		break;
+	}
+
+
 	case 113:
 	{
 		printf("type = 0x71 , cmd info\r\n");
@@ -2092,39 +2087,4 @@ void process_received_message(thmts_ctrl_cmd_proc_msg_t *msg_info)
 	default: break;
 
 	}
-}
-
-
-
-
-
-/**
- * 计算两路 CIR 三点向量的相位差（角度弧度，范围(-180, 180]）
- * 使用 [0][0], [0][1], [0][2] 三个采样点
- * 所有权重均为 1
- * 计算出来的结果是pdoa(b-a)的结果
- */
-double cal_pdoa(const uint32_t CIR_a[3][3], const uint32_t CIR_b[3][3]) {
-    c64 va[3], vb[3];
-
-    // 组装三点复向量（只用第0行）
-    for (int k = 0; k < 3; ++k) {
-        va[k] = iq_from_u32(CIR_a[0][k]);
-        vb[k] = iq_from_u32(CIR_b[0][k]);
-    }
-
-    // 计算 z = v_a^H * v_b = sum(conj(a[i]) * b[i])
-    double zr = 0.0, zi = 0.0;
-    for (int i = 0; i < 3; ++i) {
-        double ar = va[i].re, ai = va[i].im;
-        double br = vb[i].re, bi = vb[i].im;
-
-        zr += ( ar*br + ai*bi );     // 实部
-        zi += (-ar*bi + ai*br );     // 虚部
-    }
-
-    if (zr == 0.0 && zi == 0.0)
-        return 0.0;
-
-    return (57.2958*atan2(zi, zr)); // 弧度制，相位差(-pi,pi]
 }
