@@ -1,4 +1,5 @@
-flash.c.o: flash.c flash.h \
+thmts_pdoa.c.o: thmts_pdoa.c thmts_pdoa.h thmts_bb_config.h \
+ thmts_node_info.h flash.h \
  ../../SoC/ns_core0/Board/fpga_eval/Include/ns_sdk_hal.h \
  ../../SoC/ns_core0/Board/fpga_eval/Include/fpga_eval.h \
  ../../SoC/ns_core0/Common/Include/ns_sdk_soc.h \

@@ -27,11 +27,18 @@
 
 
 uint8_t reset_cnt = 0;
-int32_t AOA_index = 0;
 
-uint32_t CIR_data0[3][3];         // 通道0的CIR数据，采集三个点，第一径点以及对应前后两个点的数据
-uint32_t CIR_data1[3][3];         // 通道1的CIR数据，采集三个点，第一径点以及对应前后两个点的数据
-uint32_t CIR_data2[3][3];         // 通道2的CIR数据，采集三个点，第一径点以及对应前后两个点的数据
+uwb_config_t uwb_config = {
+    .pdoa1 = -7555,
+    .pdoa2 = 2133,
+    .pdoa3 = 0,
+    .role = 1,        // 根据实际需求设置：0=ANCHOR, 1=TAG
+    .rsv = 0,
+    .aoaOffset = 0.0f,
+    .aoaCali = {0},
+    .SN = "default",  // 或合适的SN号
+    .rangeCali = {0}
+};
 
 /* The period of the example software timer, specified in milliseconds, and
 converted to ticks using the pdMS_TO_TICKS() macro. */
@@ -682,38 +689,94 @@ void task_processRanging(void* pvParameters)
 
 		tof_int_cm=tof_two_nodes_compute_new(0, 1, 1);
 
+		double phi21 = cal_pdoa(CIR_data0, CIR_data1);
+		double phi31 = cal_pdoa(CIR_data0, CIR_data2);
+		double phi32 = cal_pdoa(CIR_data1, CIR_data2);
 
-		//根据 
-		double phi1_0 = cal_pdoa(CIR_data0, CIR_data1);
-		double phi2_0 = cal_pdoa(CIR_data0, CIR_data2);
-		double phi2_1 = cal_pdoa(CIR_data1, CIR_data2);
 		//这里的计算结果就是三组PDOA内容，单位是角度（°），这里输出的话就是10Hz的输出频度
 
 //		txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff], " tof_int between %d and %d = %d cm, valid_cnt = %d \r\n" , 1-node.dev_id,node.dev_id, tof_int_cm,valid_count);
 
 		//TODO: RSSI获取
-		in32_t rssi=10;
+		int32_t rssi=10;
 		
 		// 根据PDOA计算AOA
-		double azimuth = aoa_compute_from_pdoa(phi1_0, phi2_0, phi2_1);
+		double azimuth = aoa_compute_from_pdoa(phi21, phi31, phi32, &uwb_config);
 
 		AOA_index++;
 //		// 上报信息：交互角色（TAG） 序号 测距 根据当前校准表计算的AOA 接收信号强度 原始PDOA1 原始PDOA2
 
 		int32_t azimuth_integer=(int32_t)azimuth;
 		int32_t azimuth_decimal=abs(((int32_t)(azimuth*100))%100);
-		if(azimuth_decimal<10)
-		{
-			txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
-				"TAG %7d %6d %3d.0%1d %4d %5d %5d",
-				AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi1_0),(int32_t)(-PDOA_scale*phi2_0));
-		}
-		else
-		{
-			txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
-				"TAG %7d %6d %3d.%2d %4d %5d %5d",
-				AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi1_0),(int32_t)(-PDOA_scale*phi2_0));
-		}
+
+		#ifdef SWITCH_OUTPUT_CIR
+			if(azimuth_decimal<10)
+			{
+				//输出协议中要求pdoa统一为phi12和phi13，单位为pi/6434
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+					"TAG %7d %6d %3d.0%1d %4d %5d %5d",
+					AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi21),(int32_t)(-PDOA_scale*phi31));
+
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"CIR0: ");
+				for (uint8_t cir_idx=0;cir_idx<CIR_FOR_PDOA_LENGTH;cir_idx++)
+				{
+					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+										"%5d ",CIR_data0[0][cir_idx]);
+				}
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"CIR1: ");
+				for (uint8_t cir_idx=0;cir_idx<CIR_FOR_PDOA_LENGTH;cir_idx++)
+				{
+					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+										"%5d ",CIR_data1[0][cir_idx]);
+				}
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"CIR2: ");
+				for (uint8_t cir_idx=0;cir_idx<CIR_FOR_PDOA_LENGTH;cir_idx++)
+				{
+					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+										"%5d ",CIR_data2[0][cir_idx]);
+				}
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"\n");
+			}
+			else
+			{
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+					"TAG %7d %6d %3d.%2d %4d %5d %5d",
+					AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi21),(int32_t)(-PDOA_scale*phi31));
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"CIR0: ");
+				for (uint8_t cir_idx=0;cir_idx<CIR_FOR_PDOA_LENGTH;cir_idx++)
+				{
+					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+										"%5d ",CIR_data0[0][cir_idx]);
+				}
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"CIR1: ");
+				for (uint8_t cir_idx=0;cir_idx<CIR_FOR_PDOA_LENGTH;cir_idx++)
+				{
+					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+										"%5d ",CIR_data1[0][cir_idx]);
+				}
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"CIR2: ");
+				for (uint8_t cir_idx=0;cir_idx<CIR_FOR_PDOA_LENGTH;cir_idx++)
+				{
+					txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+										"%5d ",CIR_data2[0][cir_idx]);
+				}
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],"\n");
+			}
+		#else
+			if(azimuth_decimal<10)
+			{
+				//输出协议中要求pdoa统一为phi12和phi13，单位为pi/6434
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+					"TAG %7d %6d %3d.0%1d %4d %5d %5d\n",
+					AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi21),(int32_t)(-PDOA_scale*phi31));
+			}
+			else
+			{
+				txPoint_buff += sprintf((uint8_t *)&debug_ranging_buf3[txPoint_buff],
+					"TAG %7d %6d %3d.%2d %4d %5d %5d\n",
+					AOA_index,tof_int_cm,azimuth_integer,azimuth_decimal,rssi,(int32_t)(-PDOA_scale*phi21),(int32_t)(-PDOA_scale*phi31));
+			}
+		#endif
 
 
 		// 打印
@@ -1385,49 +1448,9 @@ void processUwbRx()
 			int subfrm_idx = thmts_rx_frame.head.subfrm_id;
 			if(subfrm_idx >= 0 && subfrm_idx <= 2)
 			{
-				if(firstPeakIdx == 1021)
-				{
-					CIR_data0[subfrm_idx][0] = channel0_CIR[1020];
-					CIR_data0[subfrm_idx][1] = channel0_CIR[1021];
-					CIR_data0[subfrm_idx][2] = channel0_CIR[0];
-
-					CIR_data1[subfrm_idx][0] = channel1_CIR[1020];
-					CIR_data1[subfrm_idx][1] = channel1_CIR[1021];
-					CIR_data1[subfrm_idx][2] = channel1_CIR[0];
-
-					CIR_data2[subfrm_idx][0] = channel2_CIR[1020];
-					CIR_data2[subfrm_idx][1] = channel2_CIR[1021];
-					CIR_data2[subfrm_idx][2] = channel2_CIR[0];
-				}
-				else if(firstPeakIdx == 0)
-				{
-					CIR_data0[subfrm_idx][0] = channel0_CIR[1021];
-					CIR_data0[subfrm_idx][1] = channel0_CIR[0];
-					CIR_data0[subfrm_idx][2] = channel0_CIR[1];
-
-					CIR_data1[subfrm_idx][0] = channel1_CIR[1021];
-					CIR_data1[subfrm_idx][1] = channel1_CIR[0];
-					CIR_data1[subfrm_idx][2] = channel1_CIR[1];
-
-					CIR_data2[subfrm_idx][0] = channel2_CIR[1021];
-					CIR_data2[subfrm_idx][1] = channel2_CIR[0];
-					CIR_data2[subfrm_idx][2] = channel2_CIR[1];
-				}
-				else if(firstPeakIdx > 0 && firstPeakIdx < 1021)
-				{
-					CIR_data0[subfrm_idx][0] = channel0_CIR[firstPeakIdx - 1];
-					CIR_data0[subfrm_idx][1] = channel0_CIR[firstPeakIdx];
-					CIR_data0[subfrm_idx][2] = channel0_CIR[firstPeakIdx + 1];
-
-					CIR_data1[subfrm_idx][0] = channel1_CIR[firstPeakIdx - 1];
-					CIR_data1[subfrm_idx][1] = channel1_CIR[firstPeakIdx];
-					CIR_data1[subfrm_idx][2] = channel1_CIR[firstPeakIdx + 1];
-
-					CIR_data2[subfrm_idx][0] = channel2_CIR[firstPeakIdx - 1];
-					CIR_data2[subfrm_idx][1] = channel2_CIR[firstPeakIdx];
-					CIR_data2[subfrm_idx][2] = channel2_CIR[firstPeakIdx + 1];
-				}
-
+			    collect_cir_from(channel0_CIR, CIR_data0, 0,firstPeakIdx);
+			    collect_cir_from(channel1_CIR, CIR_data1, 0,firstPeakIdx);
+			    collect_cir_from(channel2_CIR, CIR_data2, 0,firstPeakIdx);
 			}
 
 

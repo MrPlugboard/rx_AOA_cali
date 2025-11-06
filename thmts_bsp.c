@@ -446,15 +446,15 @@ void prvSetupHardware(void)
 #define TEST_MODE
 
 #ifdef TEST_MODE
-    // node配置写入flash
-    node_config.role = NODE_ROLE_ANCHOR_MASTER;          //主节点
-    node_config.dev_id = 0;
-    node_config.group_id = 0;
-
-////    // node配置写入flash
-//    node_config.role = NODE_ROLE_ANCHOR_SLAVE_NORMAL;          //从节点
-//    node_config.dev_id = 1;
+//    // node配置写入flash
+//    node_config.role = NODE_ROLE_ANCHOR_MASTER;          //主节点
+//    node_config.dev_id = 0;
 //    node_config.group_id = 0;
+
+//    // node配置写入flash
+    node_config.role = NODE_ROLE_ANCHOR_SLAVE_NORMAL;          //从节点
+    node_config.dev_id = 1;
+    node_config.group_id = 0;
 
 
     write_flash_node_config();
